@@ -7,6 +7,7 @@ class NodeModel(QtCore.QAbstractItemModel):
 		QtCore.QAbstractItemModel.__init__(self)
 		self.xmlobj=xmlobj
 		self.cache=list(self.xmlobj.iter())
+		self._dragged_up = False
 
 	def index(self, row, column, parent):
 		#print(row, column, parent, parent.isValid())
@@ -63,13 +64,20 @@ class NodeModel(QtCore.QAbstractItemModel):
 		else:
 			pnode = parent.internalPointer()
 		if row < 0 or row >= pnode.countchildren(): return False
-		items = pnode.getchildren()[row:row+count]
+		if self._dragged_up:
+			items = pnode.getchildren()[row+1:row+1+count]
+		else:
+			items = pnode.getchildren()[row:row+count]
+		#print(items)
+		#print(self.index(row, 1, parent).internalPointer().getchildren()[row:row+count])
 		self.beginRemoveRows(parent, row, row+count-1)
 		for i in items:
 			print('deleting',i.tag,i.attrib,'in',pnode.tag)
 			pnode.remove(i)
 			#self.cache.remove(i)
+		#print(etree.tostring(self.xmlobj))
 		self.endRemoveRows()
+		self.dataChanged.emit(parent, parent)
 		return True
 
 	def mimeTypes(self):
@@ -84,9 +92,11 @@ class NodeModel(QtCore.QAbstractItemModel):
 		mimedata = QtCore.QMimeData()
 		#print(indices)
 		items = [idx.internalPointer() for idx in indices]
-		wrapper='<wrapper>{}</wrapper>'
+		wrapper='<wrapper prev_row="{}" prev_parent="{}">{}</wrapper>'
+		str_items = '\n'.join([etree.tostring(i).decode('utf-8') for i in items])
 		#print([etree.tostring(i) for i in items])
-		stuff = wrapper.format('\n'.join([etree.tostring(i).decode('utf-8') for i in items] ))
+		prev_parent=self.xmlobj.getroottree().getpath(items[0].getparent())
+		stuff = wrapper.format(indices[0].row(), prev_parent, str_items )
 		mimedata.setData('lxml-objects',stuff)
 		return mimedata
 
@@ -99,9 +109,22 @@ class NodeModel(QtCore.QAbstractItemModel):
 		else:
 			data = etree.fromstring( mimedata.data('lxml-objects').data())
 		items = data.getchildren()
+		prev_parent = data.attrib['prev_parent']
+		place = self.index(row, column, parent).internalPointer()
+		if place is None:
+			new_parent = self.xmlobj.getroottree().getpath(self.xmlobj.getroottree().getroot())
+		else:
+			new_parent = self.xmlobj.getroottree().getpath(place.getparent())
+		print(prev_parent, new_parent)
+		if int(data.attrib['prev_row']) > row and prev_parent == new_parent:
+			self._dragged_up = True
+		else:
+			self._dragged_up = False
 		#print(row,column,items,etree.tostring(data),parent.internalPointer())
-		self.insertItems(row, items, parent)
-		return True
+		return self.insertItems(row, items, parent)
+
+	def insertItem(self, row, parent):
+		return self.insertItems(row, [item], parent)
 
 	def insertItems(self, row, items, parent):
 		if not parent.isValid():
@@ -109,16 +132,25 @@ class NodeModel(QtCore.QAbstractItemModel):
 		else:
 			pnode = parent.internalPointer()
 		self.beginInsertRows( parent, row, row+len(items)-1 )
+		print(pnode.tag, row)
+		print(etree.tostring(self.xmlobj))
 		#print(row, items, pnode.tag)
+		el = items[0]
 		if row == -1:
-			pnode.extend(items)
+			other_sib = pnode.getchildren()[0]
+			other_sib.addprevious(el)
 		else:
-			el = items[0]
-			pnode.insert(row, el)
-			for i in items[1:]:
-				el.addnext(i)
-				el = i
-		#print(etree.tostring(self.xmlobj))
+			if row >= pnode.countchildren():
+				other_sib = pnode.getchildren()[-1]
+				other_sib.addnext(el)
+			else:
+				other_sib = pnode.getchildren()[row]
+				other_sib.addprevious(el)
+		#pnode.insert(row, el)
+		for i in items[1:]:
+			el.addnext(i)
+			el = i
+		print(etree.tostring(self.xmlobj))
 		self.endInsertRows()
 		self.dataChanged.emit(parent, parent)
 		return True
@@ -167,7 +199,7 @@ if __name__ == '__main__':
 """
 	model = NodeModel(objectify.fromstring(test))
 	tree.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
-	tree.setDragEnabled(True)
+	#tree.setDragEnabled(True)
 	tree.setModel(model)
 	tree.show()
 	exit(app.exec())
