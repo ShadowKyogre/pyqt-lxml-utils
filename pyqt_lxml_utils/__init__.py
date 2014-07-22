@@ -1,0 +1,7 @@
+APPNAME="pyqt_lxml_utils"
+APPVERSION="0.1.0"
+AUTHOR="ShadowKyogre"
+DESCRIPTION="Handy widgets and objects for working with lxml documents in pyqt"
+YEAR="2014"
+PAGE="http://shadowkyogre.github.com/pyqt-lxml-utils/"
+EMAIL="shadowkyogre.public@gmail.com"
