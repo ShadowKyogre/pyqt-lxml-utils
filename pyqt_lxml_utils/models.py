@@ -11,19 +11,23 @@ class NodeModel(QtCore.QAbstractItemModel):
 	def index(self, row, column, parent):
 		#print(row, column, parent, parent.isValid())
 		if not parent.isValid():
-			if row > self.xmlobj.countchildren():
+			if row >= self.xmlobj.countchildren():
 				return QtCore.QModelIndex()
 			data=self.xmlobj.getchildren()[row]
-			if data not in self.cache:
-				self.cache.append(data)
+			#if data not in self.cache:
+			#	print('might be garbage collected, adding it')
+			self.cache.append(data)
 			return self.createIndex(row, column, data)
 		parentNode = parent.internalPointer()
 		#print(parentNode.getchildren())
 		if row >= parentNode.countchildren():
 				return QtCore.QModelIndex()
 		data=parentNode.getchildren()[row]
-		if data not in self.cache:
-			self.cache.append(data)
+		#print(parentNode.tag, row, parentNode.countchildren())
+		#print(data.tag)
+		#if data not in self.cache:
+		#	print('might be garbage collected, adding it')
+		self.cache.append(data)
 		return self.createIndex(row, column, data)
 
 	def flags(self, index):
@@ -58,13 +62,13 @@ class NodeModel(QtCore.QAbstractItemModel):
 			pnode = self.xmlobject
 		else:
 			pnode = parent.internalPointer()
-		if row < 0 or row > pnode.countchildren(): return False
+		if row < 0 or row >= pnode.countchildren(): return False
 		items = pnode.getchildren()[row:row+count]
 		self.beginRemoveRows(parent, row, row+count-1)
 		for i in items:
 			print('deleting',i.tag,i.attrib,'in',pnode.tag)
 			pnode.remove(i)
-			self.cache.remove(i)
+			#self.cache.remove(i)
 		self.endRemoveRows()
 		return True
 
@@ -78,10 +82,10 @@ class NodeModel(QtCore.QAbstractItemModel):
 
 	def mimeData( self, indices ):
 		mimedata = QtCore.QMimeData()
-		print(indices)
+		#print(indices)
 		items = [idx.internalPointer() for idx in indices]
 		wrapper='<wrapper>{}</wrapper>'
-		print([etree.tostring(i) for i in items])
+		#print([etree.tostring(i) for i in items])
 		stuff = wrapper.format('\n'.join([etree.tostring(i).decode('utf-8') for i in items] ))
 		mimedata.setData('lxml-objects',stuff)
 		return mimedata
@@ -105,7 +109,7 @@ class NodeModel(QtCore.QAbstractItemModel):
 		else:
 			pnode = parent.internalPointer()
 		self.beginInsertRows( parent, row, row+len(items)-1 )
-		print(row, items, pnode.tag)
+		#print(row, items, pnode.tag)
 		if row == -1:
 			pnode.extend(items)
 		else:
@@ -114,7 +118,7 @@ class NodeModel(QtCore.QAbstractItemModel):
 			for i in items[1:]:
 				el.addnext(i)
 				el = i
-		print(etree.tostring(self.xmlobj))
+		#print(etree.tostring(self.xmlobj))
 		self.endInsertRows()
 		self.dataChanged.emit(parent, parent)
 		return True
