@@ -137,8 +137,8 @@ class NodeModel(QtCore.QAbstractItemModel):
 		#print(row, items, pnode.tag)
 		el = items[0]
 		if row == -1:
-			other_sib = pnode.getchildren()[0]
-			other_sib.addprevious(el)
+			other_sib = pnode.getchildren()[-1]
+			other_sib.addnext(el)
 		else:
 			if row >= pnode.countchildren():
 				other_sib = pnode.getchildren()[-1]
@@ -177,16 +177,53 @@ class NodeModel(QtCore.QAbstractItemModel):
 	def columnCount(self, parent):
 		return 1
 
-class AttrModel(QtCore.QAbstractItemModel):
-	def __init__(self, xmlobj):
+class StringDictModel(QtCore.QAbstractTableModel):
+	def __init__(self, dicty={}):
 		QtCore.QAbstractItemModel.__init__(self)
+		self.dicty=dicty
+		self.sorted_keys = list(sorted(self.dicty.keys()))
+	def data(self, index, role):
+		if not index.isValid(): return None
+		self.sorted_keys = list(sorted(self.dicty.keys()))
+		key=self.sorted_keys[index.row()]
+		if role == QtCore.Qt.DisplayRole or role == QtCore.Qt.EditRole:
+			if index.column() == 1:
+				return str(self.dicty.get(key))
+			else:
+				return str(key)
+		return None
+	def flags(self, index):
+		if not index.isValid():
+				return None
+		else:
+				return QtCore.Qt.ItemIsEditable|QtCore.Qt.ItemIsEnabled|QtCore.Qt.ItemIsSelectable
+	def setData(self, index, value, role):
+		if not index.isValid(): return None
+		print(index.column())
+		if role == QtCore.Qt.EditRole:
+			if index.column() == 0:
+				key = index.data(role)
+				preserved_val = self.dicty[key]
+				del self.dicty[key]
+				self.dicty[value]=preserved_val
+			else:
+				key = self.index(index.row(), 0).data(role)
+				self.dicty[key] = value
+			return True
+		else: return False
+	def rowCount(self, parent):
+			return len(self.sorted_keys)
+	def columnCount(self, parent):
+			return 2
 
 if __name__ == '__main__':
 	from PyQt4 import QtGui
 	app = QtGui.QApplication([])
+	tabs = QtGui.QTabWidget()
+	table = QtGui.QTableView()
 	tree = QtGui.QTreeView()
 	test="""
-<deck>
+<deck name='a sample deck' mememe='no' sss='yes'>
 	<author>ShadowKyogre</author>
 	<source>Durp durp durp</source>
 	<suit name='s'>
@@ -197,9 +234,17 @@ if __name__ == '__main__':
 	</suit>
 </deck>
 """
-	model = NodeModel(objectify.fromstring(test))
+	durp_xml = objectify.fromstring(test)
+	dict_model = StringDictModel(durp_xml.attrib)
+	model = NodeModel(durp_xml)
+	table.setModel(dict_model)
+	table.verticalHeader().setVisible(False)
+	table.horizontalHeader().setResizeMode(QtGui.QHeaderView.Stretch)
 	tree.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
+	table.setEditTriggers(QtGui.QAbstractItemView.DoubleClicked)
 	#tree.setDragEnabled(True)
 	tree.setModel(model)
-	tree.show()
+	tabs.addTab(tree, 'LXML model test')
+	tabs.addTab(table, 'Dict model test')
+	tabs.show()
 	exit(app.exec())
