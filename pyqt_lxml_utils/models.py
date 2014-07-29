@@ -177,11 +177,41 @@ class NodeModel(QtCore.QAbstractItemModel):
 	def columnCount(self, parent):
 		return 1
 
+class XPathModel(QtCore.QAbstractListModel):
+	def __init__(self, tree, xpath):
+		super().__init__()
+		self._tree=tree
+		self._xpath=xpath
+	def _allElements(self):
+		if isinstance(self._xpath, str):
+			self._xpath=etree.XPath(self._xpath)
+			return self._allElements()
+		else:
+			return self._xpath(self._tree)
+	def data(self, index, role):
+		if not index.isValid():
+			return None
+		el=self._allElements()[index.row()]
+		if role == QtCore.Qt.DisplayRole or role == QtCore.Qt.EditRole:
+			return self._displayRole(el)
+		elif role == QtCore.Qt.DecorationRole:
+			return self._decorationRole(el)
+		elif role == QtCore.Qt.UserRole:
+			return el
+		elif role == QtCore.Qt.CheckStateRole:
+			return self._checkRole(el)
+	def _displayRole(self, el): return el.tag
+	def _decorationRole(self, el): pass
+	def _checkRole(self, el): pass
+	def rowCount(self, index=QtCore.QModelIndex()):
+		return len(self._allElements())
+
 class StringDictModel(QtCore.QAbstractTableModel):
 	def __init__(self, dicty={}):
 		QtCore.QAbstractItemModel.__init__(self)
 		self.dicty=dicty
 		self.sorted_keys = list(sorted(self.dicty.keys()))
+
 	def data(self, index, role):
 		if not index.isValid(): return None
 		self.sorted_keys = list(sorted(self.dicty.keys()))
@@ -197,6 +227,7 @@ class StringDictModel(QtCore.QAbstractTableModel):
 				return None
 		else:
 				return QtCore.Qt.ItemIsEditable|QtCore.Qt.ItemIsEnabled|QtCore.Qt.ItemIsSelectable
+
 	def setData(self, index, value, role):
 		if not index.isValid(): return None
 		print(index.column())
@@ -211,10 +242,12 @@ class StringDictModel(QtCore.QAbstractTableModel):
 				self.dicty[key] = value
 			return True
 		else: return False
+
 	def rowCount(self, parent):
-			return len(self.sorted_keys)
+		return len(self.sorted_keys)
+
 	def columnCount(self, parent):
-			return 2
+		return 2
 
 if __name__ == '__main__':
 	from PyQt4 import QtGui
@@ -222,6 +255,7 @@ if __name__ == '__main__':
 	tabs = QtGui.QTabWidget()
 	table = QtGui.QTableView()
 	tree = QtGui.QTreeView()
+	xpath_sample = QtGui.QListView()
 	test="""
 <deck name='a sample deck' mememe='no' sss='yes'>
 	<author>ShadowKyogre</author>
@@ -236,8 +270,10 @@ if __name__ == '__main__':
 """
 	durp_xml = objectify.fromstring(test)
 	dict_model = StringDictModel(durp_xml.attrib)
+	xpath_model = XPathModel(durp_xml,'/deck/suit')
 	model = NodeModel(durp_xml)
 	table.setModel(dict_model)
+	xpath_sample.setModel(xpath_model)
 	table.verticalHeader().setVisible(False)
 	table.horizontalHeader().setResizeMode(QtGui.QHeaderView.Stretch)
 	tree.setDragDropMode(QtGui.QAbstractItemView.InternalMove)
@@ -245,6 +281,7 @@ if __name__ == '__main__':
 	#tree.setDragEnabled(True)
 	tree.setModel(model)
 	tabs.addTab(tree, 'LXML model test')
+	tabs.addTab(xpath_sample, 'XPath model test')
 	tabs.addTab(table, 'Dict model test')
 	tabs.show()
 	exit(app.exec())
